@@ -2,11 +2,37 @@ const express = require("express")
 const db = require("./db")
 const app = express()
 const bodyParser = require('body-parser')
+const validate = require('express-validation')
+const { login, register } = require('./validation-rules')
 
 app.use( bodyParser.json() );       // to support JSON-encoded bodies
 app.use(bodyParser.urlencoded({     // to support URL-encoded bodies
   extended: true
 }));
+
+app.use(function (req, res, next) {
+    // Website you wish to allow to connect
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  
+    // Request methods you wish to allow
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, OPTIONS, PUT, PATCH, DELETE"
+    );
+  
+    // Request headers you wish to allow
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "X-Requested-With,content-type"
+    );
+  
+    // Set to true if you need the website to include cookies in the requests sent
+    // to the API (e.g. in case you use sessions)
+    res.setHeader("Access-Control-Allow-Credentials", true);
+  
+    // Pass to next layer of middleware
+    next();
+  });
 
 db.connectToDb(function(error){
     if (error) {
@@ -20,7 +46,7 @@ app.get('/healthCheck', (request, response) => {
     response.status(200).send({})
 })
 
-app.post('/register', (request, response) => {
+app.post('/register', validate(register), (request, response) => {
     const dbInstance = db.getDBInstance()
     if (dbInstance && dbInstance.db) {
         try {
@@ -43,7 +69,7 @@ app.post('/register', (request, response) => {
     }
 })
 
-app.post('/login', (request, response) => {
+app.post('/login', validate(login), (request, response) => {
     const dbInstance = db.getDBInstance()
     if (dbInstance && dbInstance.db) {
         try {
@@ -51,11 +77,12 @@ app.post('/login', (request, response) => {
                 if (error) {
                     throw new Error({ message: "Error accessing collection "})
                 }
-                const query = { firstname: request.body.firstname }
+                const { username, password } = request.body
+                const query = { username }
                 collection.findOne(query, function(error, data) {
                     if (error) {
                         throw new Error({ message: "User not found" })
-                    } else if (data) {
+                    } else if (data && data.password === password) {
                         response.status(200).send(data)
                     } else {
                         response.status(403).send({ status: "Authorization failed" })
@@ -69,4 +96,4 @@ app.post('/login', (request, response) => {
     }
 })
 
-app.listen(3000, () => console.log("Server is running"))
+app.listen(3001, () => console.log("Server is running"))
