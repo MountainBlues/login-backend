@@ -3,6 +3,7 @@ const db = require("./db")
 const app = express()
 const bodyParser = require('body-parser')
 const validate = require('express-validation')
+const bcrypt = require('bcrypt')
 const { login, register } = require('./validation-rules')
 
 app.use( bodyParser.json() );       // to support JSON-encoded bodies
@@ -46,15 +47,17 @@ app.get('/healthCheck', (request, response) => {
     response.status(200).send({})
 })
 
-app.post('/register', validate(register), (request, response) => {
+app.post('/register', validate(register), async (request, response) => {
     const dbInstance = db.getDBInstance()
     if (dbInstance && dbInstance.db) {
         try {
+            const { password } = request.body
+            const hashedPassword = await bcrypt.hash(password, 10)
             dbInstance.db().collection("users", function(error, collection) {
                 if (error) {
                     throw new Error({ message: "Error accessing collection "})
                 }
-                collection.insertOne(request.body, function(error, data) {
+                collection.insertOne({ ...request.body, password: hashedPassword }, function(error, data) {
                     if (error) {
                         throw new Error(error)
                     }
@@ -79,13 +82,18 @@ app.post('/login', validate(login), (request, response) => {
                 }
                 const { username, password } = request.body
                 const query = { username }
-                collection.findOne(query, function(error, data) {
+                collection.findOne(query, async function(error, data) {
                     if (error) {
                         throw new Error({ message: "User not found" })
-                    } else if (data && data.password === password) {
-                        response.status(200).send(data)
+                    } else if (data) {
+                        const isPasswordMatched = await bcrypt.compare(password, data.password)
+                        if (isPasswordMatched) {
+                            response.status(200).send(data)
+                        } else {
+                            response.status(403).send({ status: "Authentication failed" })
+                        }
                     } else {
-                        response.status(403).send({ status: "Authorization failed" })
+                        throw new Error({ message: "User not found" })
                     }
                 })
             })
