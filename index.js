@@ -55,19 +55,20 @@ app.post('/register', validate(register), async (request, response) => {
             const hashedPassword = await bcrypt.hash(password, 10)
             dbInstance.db().collection("users", function(error, collection) {
                 if (error) {
-                    throw new Error({ message: "Error accessing collection "})
+                    response.status(500).send({ status: "Error accessing database "})
                 }
-                collection.insertOne({ ...request.body, password: hashedPassword }, function(error, data) {
-                    if (error) {
-                        throw new Error(error)
+                collection.insertOne({ ...request.body, password: hashedPassword }, function(err, data) {
+                    if (err) {
+                        response.status(400).send({ status: "User already exists" })
+                    } else {
+                        console.log("Success data", data.ops[0])
+                        response.status(201).send({ id: data.ops[0]._id })
                     }
-                    console.log("Success data", data.ops[0])
-                    response.status(201).send({ id: data.ops[0]._id })
                 })
             })
         } catch (error) {
             console.log("Error", error)
-            response.status(500).send({ status: "failed" })
+            response.status(500).send({ status: "Something went wrong" })
         }
     }
 })
@@ -78,28 +79,28 @@ app.post('/login', validate(login), (request, response) => {
         try {
             dbInstance.db().collection("users", function(error, collection) {
                 if (error) {
-                    throw new Error({ message: "Error accessing collection "})
+                    response.status(500).send({ status: "Error accessing database "})
                 }
                 const { username, password } = request.body
                 const query = { username }
                 collection.findOne(query, async function(error, data) {
                     if (error) {
-                        throw new Error({ message: "User not found" })
+                        response.status(404).send({ status: "User does not exists" })
                     } else if (data) {
                         const isPasswordMatched = await bcrypt.compare(password, data.password)
                         if (isPasswordMatched) {
                             response.status(200).send(data)
                         } else {
-                            response.status(403).send({ status: "Authentication failed" })
+                            response.status(403).send({ status: "Username or password is incorrect" })
                         }
                     } else {
-                        throw new Error({ message: "User not found" })
+                        response.status(404).send({ status: "User does not exists" })
                     }
                 })
             })
         } catch (error) {
             console.log("Error", error)
-            response.status(500).send({ status: "failed" })
+            response.status(500).send({ status: "Something went wrong" })
         }
     }
 })
